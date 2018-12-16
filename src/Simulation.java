@@ -29,22 +29,18 @@ public class Simulation {
     private static double queue2LastChangeTime = 0.0;
     private static double queue3LastChangeTime = 0.0;
 
+
     private static double avgQueue1Len = 0.0;
     private static double avgQueue2Len = 0.0;
     private static double avgQueue3Len = 0.0;
 
-    private static int queue1Len;
-    private static int queue2Len;
-    private static int queue3Len;
-
-    private static int waitingInQ1;
-    private static int waitingInQ2;
-    private static int waitingInQ3;
-
     private static EventComparator comparator = new EventComparator();
-    private static PriorityQueue<Event> firstClassJobs = new PriorityQueue<>(10, comparator);
-    private static PriorityQueue<Event> secondClassJobs = new PriorityQueue<>(10, comparator);
-    private static PriorityQueue<Event> thirdClassJobs = new PriorityQueue<>(10, comparator);
+
+    private static PriorityQueue<Event> arrivingJobs = new PriorityQueue<>(10, comparator);
+
+    private static PriorityQueue<Event> firstClassWaitingJobs = new PriorityQueue<>(10, comparator);
+    private static PriorityQueue<Event> secondClassWaitingJobs = new PriorityQueue<>(10, comparator);
+    private static PriorityQueue<Event> thirdClassWaitingJobs = new PriorityQueue<>(10, comparator);
 
     private static PriorityQueue<Event> finishedJobs = new PriorityQueue<>(10, comparator);
 
@@ -63,7 +59,7 @@ public class Simulation {
             servingTime = RandomUtils.getRandomUniformInRange(FIRST_CLASS_MIN_REQ, FIRST_CLASS_MAX_REQ);
             time += interarrivalTime;
             Event event = new Event(FIRST_CLASS_TYPE, servingTime, time);
-            firstClassJobs.add(event);
+            arrivingJobs.add(event);
         }
     }
 
@@ -76,7 +72,7 @@ public class Simulation {
             servingTime = RandomUtils.getRandomUniformInRange(SECOND_CLASS_MIN_REQ, SECOND_CLASS_MAX_REQ);
             time += interarrivalTime;
             Event event = new Event(SECOND_CLASS_TYPE, servingTime, time);
-            secondClassJobs.add(event);
+            arrivingJobs.add(event);
         }
     }
 
@@ -89,134 +85,87 @@ public class Simulation {
             servingTime = RandomUtils.getRandomUniformInRange(THIRD_CLASS_MIN_REQ, THIRD_CLASS_MAX_REQ);
             time += interarrivalTime;
             Event event = new Event(THIRD_CLASS_TYPE, servingTime, time);
-            thirdClassJobs.add(event);
+            arrivingJobs.add(event);
         }
     }
 
     private static void jobsLoop(){
         while(currentTime < SIMULATION_TIME){
 //            System.out.println(currentTime);
-            if(waitingInQ1 > 0 || waitingInQ2 > 0 || waitingInQ3 > 0){
+            if(firstClassWaitingJobs.size()> 0 || secondClassWaitingJobs.size() >0 || thirdClassWaitingJobs.size() > 0){
+                boolean queue1Changed = false;
+                boolean queue2Changed = false;
+                boolean queue3Changed = false;
+
                 int taken = 0;
                 double jobTime = 0;
-                while(waitingInQ1 > 0 && taken < 4 && !firstClassJobs.isEmpty()){
-                    Event task = firstClassJobs.poll();
+                while(firstClassWaitingJobs.size() > 0 && taken < 4){
+                    Event task = firstClassWaitingJobs.poll();
+                    if(jobTime < task.getServingTime()) jobTime = task.getServingTime();
+                    task.setWaitingTime(currentTime - task.getArrivalTime());
+                    taken ++;
+                    finishedJobs.add(task);
+                    queue1Changed = true;
+                }
+                while(secondClassWaitingJobs.size() > 0 && taken < 4 ){
+                    Event task = secondClassWaitingJobs.poll();
+                    task.setWaitingTime(currentTime - task.getArrivalTime());
                     if(jobTime < task.getServingTime()) jobTime = task.getServingTime();
                     taken ++;
                     finishedJobs.add(task);
-//                    ///
-                    avgQueue1Len += waitingInQ1 * (currentTime - queue1LastChangeTime);
+                }
+                while(thirdClassWaitingJobs.size() > 0 && taken < 4){
+                    Event task = thirdClassWaitingJobs.poll();
+                    task.setWaitingTime(currentTime - task.getArrivalTime());
+                    if(jobTime < task.getServingTime()) jobTime = task.getServingTime();
+                    taken ++;
+                    finishedJobs.add(task);
+                }
+                if(queue1Changed){
+                    avgQueue1Len +=  firstClassWaitingJobs.size() * (currentTime - queue1LastChangeTime);
                     queue1LastChangeTime = currentTime;
-//                    ///
-                    waitingInQ1 --;
                 }
-                while(waitingInQ2 > 0 && taken < 4 && !secondClassJobs.isEmpty()){
-                    Event task = secondClassJobs.poll();
-                    if(jobTime < task.getServingTime()) jobTime = task.getServingTime();
-                    taken ++;
-                    finishedJobs.add(task);
-//                    ///
-                    avgQueue2Len += waitingInQ2 * (currentTime - queue2LastChangeTime);
+                if(queue2Changed){
+                    avgQueue1Len +=  secondClassWaitingJobs.size() * (currentTime - queue1LastChangeTime);
                     queue2LastChangeTime = currentTime;
-//                    ///
-                    waitingInQ2 --;
                 }
-                while(waitingInQ3 > 0 && taken < 4 && !thirdClassJobs.isEmpty()){
-                    Event task = thirdClassJobs.poll();
-                    if(jobTime < task.getServingTime()) jobTime = task.getServingTime();
-                    taken ++;
-                    finishedJobs.add(task);
-//                    ///
-                    avgQueue3Len -= waitingInQ3 * (currentTime - queue3LastChangeTime);
+                if(queue3Changed){
+                    avgQueue3Len += thirdClassWaitingJobs.size() * (currentTime - queue3LastChangeTime);
                     queue3LastChangeTime = currentTime;
-//                    ///
-                    waitingInQ3 --;
                 }
                 currentTime += jobTime;
-            }else{
-                double first = firstClassJobs.peek().getArrivalTime();
-                double second = firstClassJobs.peek().getArrivalTime();
-                double third = firstClassJobs.peek().getArrivalTime();
-                if(first < second && first < third){
-                    Event task = firstClassJobs.poll();
-                    currentTime += task.getArrivalTime() + task.getServingTime();
-                }else if( second < first && second < third){
-                    Event task = secondClassJobs.poll();
-                    currentTime += task.getArrivalTime() + task.getServingTime();
-                }else{
-                    Event task = thirdClassJobs.poll();
-                    currentTime += task.getArrivalTime() + task.getServingTime();
-                }
+            } else{
+                Event task = arrivingJobs.poll();
+                finishedJobs.add(task);
+                currentTime = task.getArrivalTime() + task.getServingTime();
             }
             setWaitingTime();
         }
     }
 
     private static void setWaitingTime() {
-            for (int i = 0 ; i < firstClassJobs.size(); i++){
-//            for (Event task : firstClassJobs) {
-                ArrayList<Event> tasks = new ArrayList<Event>();
-                if (firstClassJobs.peek().getArrivalTime() < currentTime) {
-                    Event task = firstClassJobs.poll();
-                    task.setWaitingTime(currentTime - task.getArrivalTime());
-                    if(!task.isWaiting()){
-                        task.setWaiting(true);
-                        avgQueue1Len += waitingInQ1 * (task.getArrivalTime() - queue1LastChangeTime);
+        for (int i = 0 ; i < arrivingJobs.size(); i++){
+            if (arrivingJobs.peek().getArrivalTime() < currentTime) {
+                Event task = arrivingJobs.poll();
+                switch (task.getEventClass()) {
+                    case FIRST_CLASS_TYPE:
+                        avgQueue1Len += firstClassWaitingJobs.size() * (task.getArrivalTime() - queue1LastChangeTime);
                         queue1LastChangeTime = task.getArrivalTime();
-                        waitingInQ1++;
-//                        queue1Len++;
-                    }
-                    tasks.add(task);
-                } else {
-                    for(Event t: tasks){
-                        firstClassJobs.add(t);
-                    }
-                    break;
-                }
-            }
-        for (int i = 0 ; i < secondClassJobs.size(); i++){
-//            for (Event task : secondClassJobs) {
-            ArrayList<Event> tasks = new ArrayList<Event>();
-            if (secondClassJobs.peek().getArrivalTime() < currentTime) {
-                Event task = secondClassJobs.poll();
-                task.setWaitingTime(currentTime - task.getArrivalTime());
-                    if(!task.isWaiting()){
-                        task.setWaiting(true);
-                        avgQueue2Len += waitingInQ2 * (task.getArrivalTime() - queue2LastChangeTime);
+                        firstClassWaitingJobs.add(task);
+                        break;
+                    case SECOND_CLASS_TYPE:
+                        avgQueue2Len += secondClassWaitingJobs.size() * (task.getArrivalTime() - queue2LastChangeTime);
                         queue2LastChangeTime = task.getArrivalTime();
-                        waitingInQ2++;
-//                        queue2Len++;
-                    }
-                    tasks.add(task);
-                } else {
-                    for(Event t: tasks) {
-                        secondClassJobs.add(t);
-                    }
-                    break;
-                }
-            }
-            for(int i =0 ; i < thirdClassJobs.size() ;i++){
-                ArrayList<Event> tasks = new ArrayList<Event>();
-
-//            for (Event task : thirdClassJobs) {
-                if (thirdClassJobs.peek().getArrivalTime() < currentTime) {
-                    Event task = thirdClassJobs.poll();
-                    task.setWaitingTime(currentTime - task.getArrivalTime());
-                    if(!task.isWaiting()){
-                        task.setWaiting(true);
-                        avgQueue3Len += waitingInQ3 * (task.getArrivalTime() - queue3LastChangeTime);
+                        secondClassWaitingJobs.add(task);
+                        break;
+                    case THIRD_CLASS_TYPE:
+                        avgQueue3Len += thirdClassWaitingJobs.size() * (task.getArrivalTime() - queue3LastChangeTime);
                         queue3LastChangeTime = task.getArrivalTime();
-                        waitingInQ3++;
-//                        queue3Len++;
-                    }
-                    tasks.add(task);
-                } else {
-                    for(Event t: tasks){
-                        thirdClassJobs.add(t);
-                    }
-                    break;
+                        thirdClassWaitingJobs.add(task);
+                        break;
                 }
             }
+        }
     }
 
     public static void main(String[] args) {
@@ -225,6 +174,8 @@ public class Simulation {
         System.out.println("AVG QUEUE 1 length: "+ avgQueue1Len/SIMULATION_TIME);
         System.out.println("AVG QUEUE 2 length: "+ avgQueue2Len/SIMULATION_TIME);
         System.out.println("AVG QUEUE 3 length: "+ avgQueue3Len/SIMULATION_TIME);
+        System.out.println("AVG QUEUE 1 length not not: "+ avgQueue1Len);
+
         double class1Count=0.0;
         double class2Count=0.0;
         double class3Count=0.0;
