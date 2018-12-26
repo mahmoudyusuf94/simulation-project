@@ -1,19 +1,24 @@
 import java.util.Random;
 
-public final class RandomUtils {
+public class RandomUtils {
 
-    private static final Random random = new Random();
+    private Random random;
 
-    public static double getRandomUniform(){
-        return random.nextDouble();
+    public RandomUtils(){
+        random = new Random();
     }
 
-    public static double getRandomUniformInRange(double min, double max){
+    public double getRandomUniform(){
+        double val = random.nextDouble();
+        return val;
+    }
+
+    public double getRandomUniformInRange(double min, double max){
         return min + (max - min) * random.nextDouble();
     }
 
-    public static double getExponential(double mean){
-        return (Math.log(1 - getRandomUniform()))/(-mean);
+    public  double getExponential(double mean){
+        return (Math.log(1 - getRandomUniform())) * mean * -1;
     }
 
 }
